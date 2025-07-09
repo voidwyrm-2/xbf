@@ -2,7 +2,7 @@
 
 An ARM64 compiler for Brainfuck
 
-## Installation
+## Installation and usage
 
 ```
 git clone https://voidwyrm-2/xbf.git
