@@ -1,0 +1,76 @@
+use std::{
+    fs::{read_to_string, write},
+    process::exit,
+};
+
+use clap::Parser;
+
+use crate::{generators::arm64::generator_arm64, lexer::Lexer};
+
+mod common;
+mod generators;
+mod lexer;
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[arg(short, long, default_value_t = ("out.s").to_string())]
+    output: String,
+
+    #[arg(short, long, default_value_t = 30000)]
+    mem: usize,
+
+    #[arg(short, long, default_value_t = ("arm64").to_string())]
+    target: String,
+
+    rem: Vec<String>,
+}
+
+fn main() {
+    let args = Args::parse();
+
+    let mut acc = String::new();
+
+    for file in args.rem {
+        let content = match read_to_string(file) {
+            Ok(s) => s,
+            Err(e) => {
+                println!("{}", e);
+                exit(1);
+            }
+        };
+
+        acc.push_str(&content);
+    }
+
+    let mut lexer = Lexer::new(&acc);
+
+    let tokens = lexer.lex();
+
+    /*
+        for t in tokens {
+            println!("{}", t);
+        }
+    */
+
+    let wrapped_asm = match args.target.as_str() {
+        "arm64" => generator_arm64(tokens, args.mem),
+        _ => {
+            println!("unknown target '{}'", args.target);
+            exit(1);
+        }
+    };
+
+    let asm = match wrapped_asm {
+        Ok(s) => s,
+        Err(e) => {
+            println!("{}", e);
+            exit(1);
+        }
+    };
+
+    if let Err(e) = write(args.output, asm) {
+        println!("{}", e);
+        exit(1);
+    }
+}
