@@ -14,16 +14,19 @@ mod lexer;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, default_value_t = ("out.s").to_string())]
+    /// The final output file.
+    #[arg(short, long, default_value_t = ("a.out").to_string())]
     output: String,
 
+    /// The amount of memory alloted to the BF program.
     #[arg(short, long, default_value_t = 30000)]
     mem: usize,
 
-    #[arg(short, long, default_value_t = ("arm64").to_string())]
+    /// The target pair to compile for.
+    #[arg(short, long, default_value_t = ("macos-arm64").to_string())]
     target: String,
 
-    rem: Vec<String>,
+    files: Vec<String>,
 }
 
 fn main() {
@@ -31,7 +34,7 @@ fn main() {
 
     let mut acc = String::new();
 
-    for file in args.rem {
+    for file in args.files {
         let content = match read_to_string(file) {
             Ok(s) => s,
             Err(e) => {

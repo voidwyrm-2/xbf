@@ -1,6 +1,6 @@
 # XBF
 
-An ARM64 compiler for Brainfuck
+A compiler for Brainf.
 
 ## Installation and usage
 
