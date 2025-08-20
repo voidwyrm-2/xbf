@@ -1,12 +1,14 @@
-use std::fmt::write;
+use std::{error::Error, fmt::write};
 
 use crate::{
-    common::XBFError,
     generators::common::match_brackets,
     lexer::{Token, TokenType},
 };
 
-pub fn generator_arm64(tokens: Vec<Token>, memory_size: usize) -> Result<String, XBFError> {
+pub fn generator_linux_arm64(
+    tokens: Vec<Token>,
+    memory_size: usize,
+) -> Result<String, Box<dyn Error>> {
     let mut result = format!(
         ".global _main
 
@@ -25,7 +27,7 @@ mov w0, 0\n",
     let brackets = match_brackets(&tokens)?;
 
     for (i, t) in tokens.iter().enumerate() {
-        let result = match t.get_typ() {
+        match t.get_typ() {
             TokenType::Inc(size) => write(&mut result, format_args!("add w0, w0, {}\n", size)),
             TokenType::Dec(size) => write(&mut result, format_args!("sub w0, w0, {}\n", size)),
             TokenType::Left(size) => write(
@@ -56,19 +58,13 @@ mov w0, 0\n",
                     "strb w0, [x1]\nstr x1, [sp, 8]\nstr x16, [sp, 16]\nmov w16, 3\nmov w0, 0\nmov w2, 1\nsvc 0x80\nldr x1, [sp, 8]\nldr x16, [sp, 16]\nldrb w0, [x1]\n"
                 ),
             ),
-        };
-
-        if let Err(e) = result {
-            return Err(XBFError::from(e));
-        }
+        }?;
     }
 
-    if let Err(e) = write(
+    write(
         &mut result,
         format_args!("add sp, sp, 16\nmov w16, 1\nmov w0, 0\nsvc 0x80"),
-    ) {
-        return Err(XBFError::from(e));
-    }
+    )?;
 
     Ok(result)
 }

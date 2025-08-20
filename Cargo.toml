@@ -1,7 +1,8 @@
 [package]
 name = "xbf"
-version = "1.0.2"
+version = "2.0.0"
 edition = "2021"
 
 [dependencies]
 clap = { version = "4.5.40", features = ["derive"] }
+inkwell = { version = "0.6.0", features = ["llvm18-1"] }

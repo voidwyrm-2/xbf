@@ -1,12 +1,14 @@
-use std::{
-    fs::{read_to_string, write},
-    process::exit,
-};
+use std::{error::Error, fs, process::exit};
 
 use clap::Parser;
 
-use crate::{generators::arm64::generator_arm64, lexer::Lexer};
+use crate::{
+    builders::{arm64::builder_linux_arm64, llvm::builder_llvm},
+    generators::{linux_arm64::generator_linux_arm64, llvm::generator_llvm},
+    lexer::Lexer,
+};
 
+mod builders;
 mod common;
 mod generators;
 mod lexer;
@@ -23,6 +25,7 @@ struct Args {
     mem: usize,
 
     /// The target pair to compile for.
+    /// The available options are 'macos-arm64', 'linux-arm64', and 'llvm'.
     #[arg(short, long, default_value_t = ("macos-arm64").to_string())]
     target: String,
 
@@ -30,19 +33,34 @@ struct Args {
     #[arg(short, long, default_value_t = ("a.out").to_string())]
     output: String,
 
+    /// The assembler to use instead of the default.
+    /// Only applies if the target is not 'llvm'.
+    #[arg(short, long, default_value_t = ("").to_string())]
+    assembler: String,
+
+    /// The linker to use instead of the default.
+    /// Only applies if the target is not 'llvm'.
+    #[arg(short, long, default_value_t = ("").to_string())]
+    linker: String,
+
     files: Vec<String>,
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
+
+    if args.files.len() == 0 {
+        eprintln!("");
+        exit(1);
+    }
 
     let mut acc = String::new();
 
-    for file in args.files {
-        let content = match read_to_string(file) {
+    for file in &args.files {
+        let content = match fs::read_to_string(file) {
             Ok(s) => s,
             Err(e) => {
-                println!("{}", e);
+                eprintln!("{}", e);
                 exit(1);
             }
         };
@@ -60,24 +78,42 @@ fn main() {
         }
     }
 
-    let wrapped_asm = match args.target.as_str() {
-        "macos-arm64" | "linux-arm64" => generator_arm64(tokens, args.mem),
+    let asm = match args.target.as_str() {
+        "macos-arm64" | "linux-arm64" => generator_linux_arm64(tokens, args.mem),
+        "llvm" => generator_llvm(tokens, args.mem, &args.files[0]),
         _ => {
-            println!("unknown target '{}'", args.target);
+            eprintln!("unknown target '{}'", args.target);
             exit(1);
         }
-    };
+    }?;
 
-    let asm = match wrapped_asm {
-        Ok(s) => s,
-        Err(e) => {
-            println!("{}", e);
-            exit(1);
+    let assembler = if args.linker.is_empty() {
+        match args.target.as_str() {
+            "macos-arm64" | "linux-arm64" => &String::from("as"),
+            _ => &String::new(),
         }
+    } else {
+        &args.assembler
     };
 
-    if let Err(e) = write(args.output, asm) {
-        println!("{}", e);
-        exit(1);
-    }
+    let linker = if args.linker.is_empty() {
+        match args.target.as_str() {
+            "macos-arm64" | "linux-arm64" => &String::from("ld"),
+            _ => &String::new(),
+        }
+    } else {
+        &args.linker
+    };
+
+    let exe = match args.target.as_str() {
+        "macos-arm64" | "linux-arm64" => {
+            builder_linux_arm64(&asm, linker, assembler, args.target.starts_with("macos"))
+        }
+        "llvm" => builder_llvm(&asm, linker, assembler, args.target.starts_with("macos")),
+        _ => unreachable!("{}", args.target),
+    }?;
+
+    fs::copy(exe, args.output)?;
+
+    Ok(())
 }
